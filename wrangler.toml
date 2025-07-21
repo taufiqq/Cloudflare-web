@@ -1,0 +1,10 @@
+# Nama proyek Anda di Cloudflare
+name = "cloudflare-web" 
+
+# Baris paling penting untuk masalah ini!
+pages_build_output_dir = "public"
+
+# Konfigurasi binding KV Anda (jika ada)
+[[kv_namespaces]]
+binding = "ID_TOKEN_STORE"
+id = "e4b68d7dd477413fbe140f59259254c7" # Ganti dengan ID KV Anda
