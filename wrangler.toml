@@ -6,3 +6,4 @@ compatibility_date = "2024-07-21" # Sesuaikan dengan tanggal terbaru
 [[durable_objects.bindings]]
 name = "TOKEN_STORE" # Nama binding yang akan diakses di Worker
 class_name = "TokenStore" # Nama kelas Durable Object Anda
+script = "durable_object.js"
