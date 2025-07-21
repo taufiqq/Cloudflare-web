@@ -2,7 +2,7 @@
 name = "cloudflare-web" 
 
 # Baris paling penting untuk masalah ini!
-pages_build_output_dir = "public"
+pages_build_output_dir = "."
 
 # Konfigurasi binding KV Anda (jika ada)
 [[kv_namespaces]]
