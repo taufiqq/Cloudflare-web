@@ -1,32 +1,27 @@
-// /functions/_worker.js
-
-export async function onRequest(context) {
-  // Hanya proses upgrade ke WebSocket jika header 'Upgrade' ada dan nilainya 'websocket'
-  if (context.request.headers.get('upgrade') === 'websocket') {
-    // Membuat objek WebSocketPair
-    const { socket, response } = new WebSocketPair();
-
-    // Menangani event saat ada pesan masuk dari klien
-    socket.addEventListener('message', event => {
-      console.log(`Pesan dari klien: ${event.data}`);
-      // Mengirim kembali pesan yang sama ke klien (echo)
-      socket.send(`Anda mengirim: ${event.data}`);
-    });
-
-    // Menangani event saat koneksi ditutup
-    socket.addEventListener('close', event => {
-      console.log('Koneksi WebSocket ditutup');
-    });
-
-    // Menangani event jika terjadi error
-    socket.addEventListener('error', event => {
-      console.error('Terjadi error WebSocket:', event.error);
-    });
-
-    // Mengembalikan response yang akan memulai handshake WebSocket
-    return new Response(null, { status: 101, webSocket: socket });
-  } else {
-    // Jika bukan permintaan upgrade WebSocket, kembalikan response biasa
-    return new Response('Silakan hubungkan melalui WebSocket.', { status: 200 });
+export const onRequest = async ({ request }: { request: Request }) => {
+  if (request.headers.get("Upgrade") !== "websocket") {
+    return new Response("Expected WebSocket", { status: 400 });
   }
-}
+
+  const upgradeHeader = request.headers.get("Upgrade");
+  if (!upgradeHeader || upgradeHeader.toLowerCase() !== "websocket") {
+    return new Response("Missing Upgrade: websocket header", { status: 426 });
+  }
+
+  const { socket, response } = Deno.upgradeWebSocket(request);
+
+  socket.onopen = () => {
+    console.log("WebSocket connected");
+    socket.send("Hello from Cloudflare!");
+  };
+
+  socket.onmessage = (e) => {
+    console.log("Received message:", e.data);
+    socket.send(`Echo: ${e.data}`);
+  };
+
+  socket.onclose = () => console.log("WebSocket closed");
+  socket.onerror = (e) => console.error("WebSocket error:", e);
+
+  return response;
+};

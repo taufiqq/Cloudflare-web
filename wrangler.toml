@@ -3,7 +3,8 @@ name = "cloudflare-web"
 
 # Baris paling penting untuk masalah ini!
 pages_build_output_dir = "."
-
+compatibility_date = "2025-07-21"
+compatibility_flags = ["nodejs_compat"]
 # Konfigurasi binding KV Anda (jika ada)
 [[kv_namespaces]]
 binding = "ID_TOKEN_STORE"
