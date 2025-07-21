@@ -1,67 +1,43 @@
-// functions/[[path]].ts
+/**
+ * Fungsi ini menangani semua request masuk.
+ * @param {object} context - Objek konteks dari Cloudflare Functions.
+ */
+export async function onRequest(context) {
+  // `context.env` adalah tempat binding ke KV disimpan.
+  // `ID_TOKEN_STORE` adalah NAMA BINDING yang akan kita atur di dashboard.
+  const { env, next, params } = context;
 
-interface Env {
-  // Binding ke Durable Object kita
-  VALIDATORS: DurableObjectNamespace;
-}
+  // `params.path` berisi array dari segmen URL.
+  // Contoh: /user123/abc -> ['user123', 'abc']
+  const path = params.path;
 
-export const onRequest: PagesFunction<Env> = async (context) => {
-  const { request, env, next } = context;
-  const url = new URL(request.url);
-  const pathParts = url.pathname.slice(1).split('/'); // Hilangkan '/' di awal
-
-  // Rute Admin untuk SET TOKEN: /admin/set
-  if (pathParts[0] === 'admin' && pathParts[1] === 'set' && request.method === 'POST') {
-    try {
-        const { id, token } = await request.json<{ id: string, token: string }>();
-        if (!id || !token) {
-            return new Response('ID dan Token dibutuhkan', { status: 400 });
-        }
-
-        // Dapatkan ID unik untuk Durable Object berdasarkan nama 'id'
-        const doId = env.VALIDATORS.idFromName(id);
-        const stub = env.VALIDATORS.get(doId);
-
-        // Teruskan request ke Durable Object untuk menyimpan token
-        const newRequest = new Request(`${url.origin}/set`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: token }),
-        });
-
-        return await stub.fetch(newRequest);
-
-    } catch (e) {
-        return new Response('Request body tidak valid.', { status: 400 });
-    }
+  // 1. Cek apakah format URL benar (harus ada 2 bagian: id dan token)
+  if (!Array.isArray(path) || path.length !== 2) {
+    // Jika format salah, tampilkan halaman gagal.
+    return next('/gagal.html');
   }
 
-  // Rute Validasi: /{id}/{token}
-  if (pathParts.length === 2) {
-    const userId = pathParts[0];
-    const userToken = pathParts[1];
+  const userId = path[0];
+  const userToken = path[1];
 
-    // Dapatkan ID unik untuk Durable Object berdasarkan nama 'userId'
-    const doId = env.VALIDATORS.idFromName(userId);
-    // Dapatkan "stub", yaitu pointer ke Durable Object
-    const stub = env.VALIDATORS.get(doId);
+  try {
+    // 2. Ambil token yang tersimpan di KV berdasarkan userId
+    const storedToken = await env.ID_TOKEN_STORE.get(userId);
 
-    // Buat request baru untuk dikirim ke Durable Object
-    const validationRequest = new Request(`${url.origin}/validate/${userToken}`);
-
-    // Panggil metode fetch() di Durable Object
-    const response = await stub.fetch(validationRequest);
-    const { success } = await response.json<{ success: boolean }>();
-
-    if (success) {
-      // Tampilkan halaman sukses
+    // 3. Validasi
+    // Cek apakah ID ada di KV dan tokennya cocok.
+    if (storedToken !== null && storedToken === userToken) {
+      // Jika cocok, tampilkan halaman sukses.
+      console.log(`Akses berhasil untuk ID: ${userId}`);
       return next('/sukses.html');
     } else {
-      // Tampilkan halaman gagal
+      // Jika ID tidak ditemukan atau token salah, tampilkan halaman gagal.
+      console.log(`Akses gagal untuk ID: ${userId}`);
       return next('/gagal.html');
     }
+  } catch (error) {
+    // Menangani jika ada error saat mengakses KV
+    console.error("Error saat mengakses KV:", error);
+    return new Response("Terjadi kesalahan internal pada server.", { status: 500 });
   }
-  
-  // Jika rute tidak cocok, biarkan Pages menangani (cth: menampilkan admin.html)
-  return next();
-};
+}
