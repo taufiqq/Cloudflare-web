@@ -1,0 +1,17 @@
+<form id="form">
+  <input name="id" placeholder="ID"><br>
+  <input name="token" placeholder="Token"><br>
+  <button type="submit">Simpan</button>
+</form>
+<div id="status"></div>
+<script>
+form.onsubmit = async (e) => {
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData(form).entries());
+  const res = await fetch("/admin/api/save", {
+    method: "POST",
+    body: JSON.stringify(data)
+  });
+  document.getElementById("status").textContent = await res.text();
+};
+</script>
