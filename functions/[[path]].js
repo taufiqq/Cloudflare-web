@@ -1,43 +1,43 @@
-/**
- * Fungsi ini menangani semua request masuk.
- * @param {object} context - Objek konteks dari Cloudflare Functions.
- */
 export async function onRequest(context) {
-  // `context.env` adalah tempat binding ke KV disimpan.
-  // `ID_TOKEN_STORE` adalah NAMA BINDING yang akan kita atur di dashboard.
-  const { env, next, params } = context;
+  const { env, next, params, request } = context;
+  const url = new URL(request.url);
 
-  // `params.path` berisi array dari segmen URL.
-  // Contoh: /user123/abc -> ['user123', 'abc']
+  console.log(`--- Request Masuk ---`);
+  console.log(`URL Lengkap: ${url.href}`);
+  console.log(`Path dari URL: ${url.pathname}`);
+  console.log(`Isi params.path: ${JSON.stringify(params.path)}`);
+
   const path = params.path;
 
-  // 1. Cek apakah format URL benar (harus ada 2 bagian: id dan token)
   if (!Array.isArray(path) || path.length !== 2) {
-    // Jika format salah, tampilkan halaman gagal.
-    return next('/gagal.html');
+    console.log("Kondisi GAGAL: Format path tidak sesuai. Seharusnya ada 2 bagian.");
+    // Mari kita buat halaman default untuk URL yang formatnya aneh
+    return new Response("Format URL salah. Gunakan /id/token.", { status: 400 });
   }
 
   const userId = path[0];
   const userToken = path[1];
+  console.log(`Mencoba validasi untuk ID: '${userId}' dengan Token: '${userToken}'`);
 
   try {
-    // 2. Ambil token yang tersimpan di KV berdasarkan userId
-    const storedToken = await env.ID_TOKEN_STORE.get(userId);
+    const kvBinding = env.ID_TOKEN_STORE;
+    if (!kvBinding) {
+      console.error("Kondisi FATAL: Binding KV 'ID_TOKEN_STORE' tidak ditemukan di env!");
+      return new Response("Konfigurasi server error: KV binding tidak ada.", { status: 500 });
+    }
 
-    // 3. Validasi
-    // Cek apakah ID ada di KV dan tokennya cocok.
+    const storedToken = await kvBinding.get(userId);
+    console.log(`Token yang tersimpan di KV untuk ID '${userId}': '${storedToken}'`);
+
     if (storedToken !== null && storedToken === userToken) {
-      // Jika cocok, tampilkan halaman sukses.
-      console.log(`Akses berhasil untuk ID: ${userId}`);
+      console.log("Kondisi SUKSES: ID dan Token cocok. Menampilkan halaman sukses.");
       return next('/sukses.html');
     } else {
-      // Jika ID tidak ditemukan atau token salah, tampilkan halaman gagal.
-      console.log(`Akses gagal untuk ID: ${userId}`);
+      console.log("Kondisi GAGAL: ID tidak ditemukan atau Token salah. Menampilkan halaman gagal.");
       return next('/gagal.html');
     }
   } catch (error) {
-    // Menangani jika ada error saat mengakses KV
-    console.error("Error saat mengakses KV:", error);
+    console.error("Terjadi error di dalam blok try-catch:", error);
     return new Response("Terjadi kesalahan internal pada server.", { status: 500 });
   }
 }
