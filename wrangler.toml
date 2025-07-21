@@ -1,13 +1,19 @@
-name = "m"
-compatibility_date = "2024-07-21"
+name = "m" # Ganti dengan nama proyek Anda
+compatibility_date = "2023-11-21"
 
-# ✅ Tambahkan ini supaya valid untuk Pages:
-pages_build_output_dir = "."
+# Konfigurasi untuk Cloudflare Pages
+pages_build_output_dir = "public"
 
+# --- Konfigurasi Durable Objects ---
+# Ini memberitahu wrangler untuk membuat migrasi (script)
+# yang berisi kelas Durable Object kita.
 [[durable_objects.bindings]]
-name = "TOKEN_STORE"
-class_name = "TokenStore"
+name = "VALIDATORS" # Nama ini HARUS SAMA dengan di Env interface
+class_name = "TokenValidator" # Nama kelas yang kita ekspor dari file DO
 
+# Tentukan lokasi file kelas Durable Object kita.
+# Ini akan membuat satu "worker" di latar belakang
+# yang tugasnya hanya menjalankan kelas DO.
 [[migrations]]
-tag = "v1"
-new_classes = ["TokenStore"]
+tag = "v1" # Versi migrasi Anda
+new_classes = ["TokenValidator"]
