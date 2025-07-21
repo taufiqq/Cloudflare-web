@@ -1,5 +1,5 @@
 # wrangler.toml
-name = "your-pages-project" # Ganti dengan nama proyek Pages Anda
+name = "m" # Ganti dengan nama proyek Pages Anda
 main = "_worker.js"
 compatibility_date = "2024-07-21" # Sesuaikan dengan tanggal terbaru
 
