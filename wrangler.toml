@@ -1,12 +1,12 @@
-name = "token-access"
-compatibility_date = "2024-07-20"
+name = "m"
+compatibility_date = "2024-07-21"
+
+# ✅ Tambahkan ini supaya valid untuk Pages:
+pages_build_output_dir = "."
 
 [[durable_objects.bindings]]
 name = "TOKEN_STORE"
 class_name = "TokenStore"
-
-[build]
-command = ""
 
 [[migrations]]
 tag = "v1"
