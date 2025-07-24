@@ -170,7 +170,7 @@ if (!window.MQTT_CREDENTIALS || !window.MQTT_CREDENTIALS.user) {
 }
 
 const MQTT_SETTINGS = {
-    host: 'ws://xf46ce9c.ala.asia-southeast1.emqxsl.com',
+    host: 'wss://xf46ce9c.ala.asia-southeast1.emqxsl.com',
     port: 8084,
     clientId: `game_controller_${window.MQTT_CREDENTIALS.user}_${Math.random().toString(16).substr(2, 4)}`,
     // Gunakan user dan pass yang didapat dari KV melalui Function
