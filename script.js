@@ -268,7 +268,7 @@ function processWheelCommands(belok, gas) {
     let targetRodaKiri = 0;
     let targetRodaKanan = 0;
     if (belok !== wheelState.belok) {
-      let kirimBelok = 90 + gas;
+      let kirimBelok = 90 + belok;
       publishMqtt(window.ID+'/belok', kirimBelok.toString());
       wheelState.belok = belok;
     }
@@ -347,9 +347,11 @@ function updateGameData() {
         const steeringCommand = mapValueToLevel(controlState.steering, STEERING_LEVELS);
         processWheelCommands(steeringCommand, gasCommand);
 
-    } else if (controlState.steering !== -0) {
+    } else if (controlState.steering !== 0) {
       const steeringCommand = mapValueToLevel(controlState.steering, STEERING_LEVELS);
-      processWheelCommands(steeringCommand,0);
+        if (steeringCommand !== 0) {
+        processWheelCommands(steeringCommand,0);
+        }
     }
     
     
