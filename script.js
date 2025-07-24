@@ -1,8 +1,6 @@
 // --- BAGIAN BARU: SETUP STATE & DISPLAY ---
 
 // 1. Objek untuk menyimpan semua nilai kontrol game.
-document.addEventListener('DOMContentLoaded', () => {
-
 
 const controlState = {
     steering: 0, // Nilai setir: -15 (kiri) hingga 15 (kanan)
@@ -177,7 +175,7 @@ const MQTT_PORT = 8084; // Port untuk WSS di EMQX Cloud
 const MQTT_CLIENT_ID = `game_controller_paho_${window.MQTT_CREDENTIALS.user}_${Math.random().toString(16).substr(2, 4)}`;
 
 // Buat instance client Paho
-const client = new Paho.MQTT.Client(MQTT_HOST, MQTT_PORT, MQTT_CLIENT_ID);
+const client = new Paho.Client(MQTT_HOST, MQTT_PORT, MQTT_CLIENT_ID);
 
 // Konfigurasi koneksi
 const connectOptions = {
@@ -317,7 +315,7 @@ function processWheelCommands(belok, gas) {
 function publishMqtt(topic, message) {
     if (client.isConnected()) {
         console.log(`MQTT PUB -> Topic: ${topic}, Pesan: ${message}`);
-        const mqttMessage = new Paho.MQTT.Message(message);
+        const mqttMessage = new Paho.Message(message);
         mqttMessage.destinationName = topic;
         client.send(mqttMessage);
     } else {
@@ -409,6 +407,4 @@ document.addEventListener('DOMContentLoaded', () => {
     // Cek saat halaman dimuat dan saat orientasi berubah
     checkOrientationSupport();
     window.addEventListener('orientationchange', checkOrientationSupport);
-});
-
 });
