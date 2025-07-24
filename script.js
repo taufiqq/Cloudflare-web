@@ -1,6 +1,9 @@
 // --- BAGIAN BARU: SETUP STATE & DISPLAY ---
 
 // 1. Objek untuk menyimpan semua nilai kontrol game.
+document.addEventListener('DOMContentLoaded', () => {
+
+
 const controlState = {
     steering: 0, // Nilai setir: -15 (kiri) hingga 15 (kanan)
     gas: 0,      // Nilai gas: 0 (lepas) hingga 30 (penuh)
@@ -406,4 +409,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Cek saat halaman dimuat dan saat orientasi berubah
     checkOrientationSupport();
     window.addEventListener('orientationchange', checkOrientationSupport);
+});
+
 });
