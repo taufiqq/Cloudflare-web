@@ -247,7 +247,7 @@ function processWheelCommands(belok, gas) {
     let targetRodaKanan = 0;
     if (belok !== wheelState.belok) {
       let kirimGas = 90 + gas;
-      publishMqtt('robot/belok', kirimGas.toString());
+      publishMqtt(window.ID+'/belok', kirimGas.toString());
       wheelState.belok = gas;
     }
     // Switch case sekarang bersih dan logis
@@ -279,12 +279,12 @@ function processWheelCommands(belok, gas) {
 
     if (targetRodaKiri !== wheelState.kiri) {
         wheelState.kiri = targetRodaKiri;
-        publishMqtt('robot/roda/kiri', wheelState.kiri.toString());
+        publishMqtt(window.ID+'/kiri', wheelState.kiri.toString());
     }
 
     if (targetRodaKanan !== wheelState.kanan) {
         wheelState.kanan = targetRodaKanan;
-        publishMqtt('robot/roda/kanan', wheelState.kanan.toString());
+        publishMqtt(window.ID+'/kanan', wheelState.kanan.toString());
     }
     // DIPERBAIKI: Menghapus publish yang berlebihan di sini.
 }

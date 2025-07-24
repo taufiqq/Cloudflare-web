@@ -1,17 +1,33 @@
 // functions/[token].js
 
 export async function onRequest(context) {
-    // context berisi semua hal yang kita butuhkan: request, env (environment variables), params (dari URL)
-    const { request, env, params } = context;
+    // context berisi semua hal yang kita butuhkan: request, env (environment variables), params (dari URL), next (untuk melanjutkan ke handler lain)
+    const { request, env, params, next } = context;
 
-    // 1. Ambil token dari parameter URL (misal: 'tokenmasuk' dari /tokenmasuk)
+    // --- BAGIAN BARU UNTUK SOLUSI ---
+    // 1. Dapatkan pathname dari URL (misal: '/token123' atau '/style.css')
+    const { pathname } = new URL(request.url);
+
+    // 2. Buat Regex untuk mendeteksi ekstensi file statis
+    // Jika path diakhiri dengan ekstensi ini, kita anggap itu file statis
+    const isStaticAsset = /\.(css|js|svg|png|jpg|jpeg|gif|ico|webmanifest)$/.test(pathname);
+
+    // 3. Jika ini adalah request untuk file statis, serahkan ke handler aset bawaan Cloudflare Pages
+    if (isStaticAsset) {
+        // next() akan melanjutkan rantai middleware, dalam kasus ini ke penyaji aset statis Pages.
+        return next();
+    }
+    // --- AKHIR BAGIAN BARU ---
+
+
+    // Kode lama Anda dimulai dari sini, dan akan berjalan HANYA jika bukan file statis.
+    // Ambil token dari parameter URL (misal: 'tokenmasuk' dari /tokenmasuk)
     const tokenKey = params.token;
 
-    // 2. Cek ke KV Namespace 'TOKEN'
-    // Kita gunakan { type: 'json' } agar nilainya otomatis di-parse dari string JSON ke objek JavaScript
+    // Cek ke KV Namespace 'TOKEN'
     const credentials = await env.TOKEN.get(tokenKey, { type: 'json' });
 
-    // 3. Jika token tidak ditemukan (credentials bernilai null), kirim pesan error
+    // Jika token tidak ditemukan (credentials bernilai null), kirim pesan error
     if (!credentials) {
         const htmlError = `
             <!DOCTYPE html>
@@ -36,15 +52,15 @@ export async function onRequest(context) {
         });
     }
 
-    // 4. Jika token DITEMUKAN, lanjutkan untuk menampilkan C.html
+    // Jika token DITEMUKAN, lanjutkan untuk menampilkan C.html
     try {
         // Ambil file C.html dari aset statis Anda
+        // Perbaikan kecil: Gunakan env.ASSETS.fetch(request) untuk C.html, tapi cara Anda juga bisa.
         const assetUrl = new URL('/C.html', request.url);
         const asset = await env.ASSETS.fetch(assetUrl);
         let html = await asset.text();
 
-        // 5. Siapkan skrip untuk disuntikkan ke dalam HTML
-        // Ini cara aman untuk meneruskan data dari server ke client
+        // Siapkan skrip untuk disuntikkan ke dalam HTML
         const injectionScript = `
         <script>
             // Data ini disuntikkan oleh Cloudflare Function
@@ -52,15 +68,16 @@ export async function onRequest(context) {
                 user: "${credentials.user}",
                 pass: "${credentials.pass}"
             };
+            window.ID = ${credentials.id};
         </script>
         `;
 
-        // 6. Suntikkan skrip tersebut tepat sebelum tag penutup </body>
+        // Suntikkan skrip tersebut tepat sebelum tag penutup </body>
         html = html.replace('</body>', `${injectionScript}</body>`);
 
-        // 7. Kirim HTML yang sudah dimodifikasi ke browser
+        // Kirim HTML yang sudah dimodifikasi ke browser
         return new Response(html, {
-            headers: asset.headers, // Gunakan header asli dari file (misal: 'text/html')
+            headers: asset.headers,
         });
 
     } catch (e) {
