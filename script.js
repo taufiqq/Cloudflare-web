@@ -169,24 +169,45 @@ if (!window.MQTT_CREDENTIALS || !window.MQTT_CREDENTIALS.user) {
     throw new Error("MQTT Credentials not injected. Cannot connect.");
 }
 
-const MQTT_SETTINGS = {
-    host: 'wss://xf46ce9c.ala.asia-southeast1.emqxsl.com',
-    port: 8084,
-    clientId: `game_controller_${window.MQTT_CREDENTIALS.user}_${Math.random().toString(16).substr(2, 4)}`,
-    // Gunakan user dan pass yang didapat dari KV melalui Function
-    username: window.MQTT_CREDENTIALS.user,
+const MQTT_HOST = 'xf46ce9c.ala.asia-southeast1.emqxsl.com';
+const MQTT_PORT = 8084; // Port untuk WSS di EMQX Cloud
+const MQTT_CLIENT_ID = `game_controller_paho_${window.MQTT_CREDENTIALS.user}_${Math.random().toString(16).substr(2, 4)}`;
+
+// Buat instance client Paho
+const client = new Paho.MQTT.Client(MQTT_HOST, MQTT_PORT, MQTT_CLIENT_ID);
+
+// Konfigurasi koneksi
+const connectOptions = {
+    useSSL: true, // WAJIB! Ini akan mengaktifkan koneksi wss://
+    userName: window.MQTT_CREDENTIALS.user,
     password: window.MQTT_CREDENTIALS.pass,
+    onSuccess: onConnect,
+    onFailure: onConnectionFailure,
+    reconnect: true
 };
 
-// Selebihnya dari file script.js Anda tetap sama...
-console.log(`Menghubungkan ke broker MQTT: ${MQTT_SETTINGS.host}`);
-const client = mqtt.connect(MQTT_SETTINGS.host, MQTT_SETTINGS);
-client.on('connect', () => console.log('Berhasil terhubung ke broker MQTT!'));
-client.on('error', (err) => {
-    console.error('Koneksi MQTT Gagal:', err);
-    client.end();
-});
 
+// Selebihnya dari file script.js Anda tetap sama...
+client.onConnectionLost = onConnectionLost;
+
+// --- 2. FUNGSI CALLBACK & KONEKSI ---
+function onConnect() {
+    console.log('Berhasil terhubung ke broker MQTT dengan Paho!');
+}
+
+function onConnectionFailure(response) {
+    console.error('Koneksi MQTT Gagal:', response.errorMessage);
+}
+
+function onConnectionLost(response) {
+    if (response.errorCode !== 0) {
+        console.log("Koneksi MQTT terputus:", response.errorMessage);
+    }
+}
+
+// Mulai proses koneksi
+console.log(`Menghubungkan ke broker MQTT: wss://${MQTT_HOST}:${MQTT_PORT}`);
+client.connect(connectOptions);
 // --- 2. OBJEK PENYIMPAN DATA RODA (Tidak Berubah) ---
 const wheelState = { kanan: 0, kiri: 0, belok:0};
 
@@ -246,9 +267,9 @@ function processWheelCommands(belok, gas) {
     let targetRodaKiri = 0;
     let targetRodaKanan = 0;
     if (belok !== wheelState.belok) {
-      let kirimGas = 90 + gas;
-      publishMqtt(window.ID+'/belok', kirimGas.toString());
-      wheelState.belok = gas;
+      let kirimBelok = 90 + gas;
+      publishMqtt(window.ID+'/belok', kirimBelok.toString());
+      wheelState.belok = belok;
     }
     // Switch case sekarang bersih dan logis
     switch (belok) {
@@ -291,13 +312,16 @@ function processWheelCommands(belok, gas) {
 
 // Fungsi pembantu publish (Tidak berubah)
 function publishMqtt(topic, message) {
-    if (client.connected) {
+    if (client.isConnected()) {
         console.log(`MQTT PUB -> Topic: ${topic}, Pesan: ${message}`);
-        client.publish(topic, message);
+        const mqttMessage = new Paho.MQTT.Message(message);
+        mqttMessage.destinationName = topic;
+        client.send(mqttMessage);
     } else {
-        console.warn(`Gagal publish, klien MQTT tidak terhubung. Topic: ${topic}`);
+        console.warn(`Gagal publish, klien Paho MQTT tidak terhubung. Topic: ${topic}`);
     }
 }
+
 
 // --- 4. GAME LOOP (DIPERBAIKI & DISEDERHANAKAN) ---
 function updateGameData() {
@@ -322,6 +346,8 @@ function updateGameData() {
         const steeringCommand = mapValueToLevel(controlState.steering, STEERING_LEVELS);
         processWheelCommands(steeringCommand, gasCommand);
 
+    } else if (steeringCommand !== -0) {
+      processWheelCommands(steeringCommand,0);
     }
     
     
@@ -330,3 +356,54 @@ function updateGameData() {
 
 // --- Mulai game loop ---
 updateGameData();
+
+// --- BAGIAN BARU: LOGIKA ORIENTASI & FULLSCREEN ---
+
+document.addEventListener('DOMContentLoaded', () => {
+    const startButton = document.getElementById('start-fullscreen-btn');
+
+    if (startButton) {
+        startButton.addEventListener('click', () => {
+            // Minta Fullscreen
+            const docElm = document.documentElement;
+            if (docElm.requestFullscreen) {
+                docElm.requestFullscreen();
+            } else if (docElm.mozRequestFullScreen) { // Firefox
+                docElm.mozRequestFullScreen();
+            } else if (docElm.webkitRequestFullscreen) { // Chrome, Safari and Opera
+                docElm.webkitRequestFullscreen();
+            } else if (docElm.msRequestFullscreen) { // IE/Edge
+                docElm.msRequestFullscreen();
+            }
+
+            // Minta Kunci Orientasi ke Landscape (jika didukung)
+            // Ini adalah API modern yang lebih disukai
+            if (screen.orientation && typeof screen.orientation.lock === 'function') {
+                screen.orientation.lock('landscape').catch(err => {
+                    console.warn("Tidak dapat mengunci orientasi:", err);
+                });
+            } 
+            // Fallback untuk API lama (kurang umum sekarang)
+            else if (screen.lockOrientation) {
+                screen.lockOrientation('landscape');
+            }
+        });
+    }
+
+    // Fungsi untuk memeriksa apakah API Fullscreen & Lock didukung,
+    // lalu sembunyikan tombol jika tidak perlu.
+    function checkOrientationSupport() {
+        const isLandscape = window.matchMedia("(orientation: landscape)").matches;
+        const canLock = screen.orientation && typeof screen.orientation.lock === 'function';
+        
+        // Jika sudah landscape dan tidak bisa mengunci, tidak perlu tombol.
+        // Atau jika browser tidak mendukung API sama sekali.
+        if ( (isLandscape && !canLock) || !startButton ) {
+            if(startButton) startButton.style.display = 'none'; // Sembunyikan tombol jika sudah ok
+        }
+    }
+
+    // Cek saat halaman dimuat dan saat orientasi berubah
+    checkOrientationSupport();
+    window.addEventListener('orientationchange', checkOrientationSupport);
+});

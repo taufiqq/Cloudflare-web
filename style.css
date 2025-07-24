@@ -116,3 +116,55 @@
             z-index: 100;
             white-space: pre; /* Agar baris baru (\n) berfungsi */
         }
+        
+  /* --- Tambahkan kode ini di akhir style.css --- */
+
+/* 1. Wrapper untuk semua kontrol game */
+.game-controls {
+    /* Properti ini akan diatur oleh media query di bawah */
+    display: none; /* Sembunyikan secara default */
+    width: 100%;
+    height: 100%;
+}
+
+/* 2. Overlay untuk mode portrait */
+#orientation-lock {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #222;
+    color: white;
+    z-index: 9999;
+    display: flex; /* Akan diatur oleh media query */
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    font-size: 1.2em;
+    font-family: sans-serif;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+/* 3. Media Query untuk mengatur tampilan berdasarkan orientasi */
+
+/* JIKA LANDSCAPE: Tampilkan game, sembunyikan pesan */
+@media (orientation: landscape) {
+    #orientation-lock {
+        display: none;
+    }
+    .game-controls {
+        display: block;
+    }
+}
+
+/* JIKA PORTRAIT: Tampilkan pesan, sembunyikan game (sudah default) */
+@media (orientation: portrait) {
+    #orientation-lock {
+        display: flex;
+    }
+    .game-controls {
+        display: none;
+    }
+}

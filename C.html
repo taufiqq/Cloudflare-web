@@ -5,10 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>UI Game Balap Kustom</title>
     <link rel="stylesheet" href="style.css">
-    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.1.0/paho-mqtt.min.js"></script>
     <script src="script.js" defer></script>
 </head>
 <body>
+    <div id="orientation-lock">
+      <div> <!-- Wrapper baru untuk konten -->
+            <p>🔄<br><br>Harap putar perangkat Anda ke posisi landscape untuk bermain.</p>
+            <button id="start-fullscreen-btn" style="padding: 15px 30px; font-size: 1.2em; border-radius: 10px; border: none; background-color: #4CAF50; color: white; cursor: pointer;">Mulai</button>
+            <p style="font-size: 0.8em; color: #ccc; margin-top: 20px;">(Ini akan mengaktifkan mode fullscreen)</p>
+        </div>
+       
+    </div>
+
+    <!-- SEMUA KONTROL GAME DIBUNGKUS DI SINI -->
+  <div class="game-controls">
 
     <!-- Display untuk melihat data -->
     <div id="debug-display"></div>
@@ -54,6 +65,6 @@
             </div>
         </div>
     </div>
-    
+  </div>
 </body>
 </html>
