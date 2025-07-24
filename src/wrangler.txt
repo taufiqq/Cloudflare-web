@@ -1,0 +1,11 @@
+# Nama proyek Anda di Cloudflare
+name = "cloudflare-web" 
+
+# Baris paling penting untuk masalah ini!
+pages_build_output_dir = "."
+compatibility_date = "2025-07-21"
+compatibility_flags = ["nodejs_compat"]
+# Konfigurasi binding KV Anda (jika ada)
+[[kv_namespaces]]
+binding = "TOKEN"
+id = "e4b68d7dd477413fbe140f59259254c7" # Ganti dengan ID KV Anda
