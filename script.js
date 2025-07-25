@@ -347,11 +347,9 @@ function updateGameData() {
         const steeringCommand = mapValueToLevel(controlState.steering, STEERING_LEVELS);
         processWheelCommands(steeringCommand, gasCommand);
 
-    } else if (controlState.steering !== 0) {
+    } else {
       const steeringCommand = mapValueToLevel(controlState.steering, STEERING_LEVELS);
-        if (steeringCommand !== 0) {
         processWheelCommands(steeringCommand,0);
-        }
     }
     
     
