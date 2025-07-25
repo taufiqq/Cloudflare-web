@@ -12,3 +12,7 @@ compatibility_date = "2024-03-20"
 [[kv_namespaces]]
 binding = "TOKEN" # Nama variabel yang akan digunakan di dalam Functions
 id = "e4b68d7dd477413fbe140f59259254c7" # ID KV Namespace Anda
+
+[[kv_namespaces]]
+binding = "ADMIN"
+id = "65af14e6ce5f4aad928fc3e474c8642e"
