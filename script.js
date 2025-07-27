@@ -236,6 +236,7 @@ function publishMqtt(topic, message) {
     if (client.isConnected()) {
         const mqttMessage = new Paho.Message(message);
         mqttMessage.destinationName = topic;
+        mqttMessage.qos = 0;
         client.send(mqttMessage);
     }
 }
