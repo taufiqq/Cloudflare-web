@@ -51,9 +51,15 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const genBtn = createButton('Generate Baru', 'btn-generate', async (e) => {
             if (!confirm('Yakin ingin generate token baru? Token lama akan hangus.')) return;
-            e.target.disabled = true;
+            const button = e.target;
+            button.disabled = true;
+            button.textContent = 'Generating...'; // Beri feedback lebih jelas
+            
+            // Tunggu (await) sampai server selesai memproses
             await apiRequest('generate_new', { token_key: tokenData.key });
-            fetchTokens();
+            
+            // Baru panggil fetchTokens() SETELAH server selesai
+            fetchTokens(); 
         });
 
         const copyBtn = createButton('Copy URL', 'btn-copy', () => {
@@ -63,10 +69,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const delBtn = createButton('Hapus', 'btn-delete', async (e) => {
             if (!confirm('Yakin ingin menghapus token ini?')) return;
-            e.target.disabled = true;
+            const button = e.target;
+            button.disabled = true;
+            button.textContent = 'Menghapus...';
+
+            // Tunggu (await) sampai server selesai memproses
             await apiRequest('delete', { token_key: tokenData.key });
+            
+            // Baru panggil fetchTokens() SETELAH server selesai
             fetchTokens();
         });
+
 
         actionsCell.append(saveBtn, genBtn, copyBtn, delBtn);
         row.appendChild(actionsCell);
