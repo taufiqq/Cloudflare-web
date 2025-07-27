@@ -1,11 +1,12 @@
-// File: admin.client.js (VERSI PERBAIKAN)
+// File: admin.client.js (VERSI PERBAIKAN FINAL)
 
 document.addEventListener('DOMContentLoaded', () => {
     const tableBody = document.querySelector('#tokens-table tbody');
     const addForm = document.getElementById('add-token-form');
     const loadingIndicator = document.getElementById('loading-indicator');
 
-    const apiBase = '/api/admin';
+    // --- PERBAIKAN UTAMA DI SINI ---
+    const apiEndpoint = '/api/admin/token'; // URL yang benar, tanpa 's'
 
     // Fungsi untuk menampilkan indikator loading
     const showLoading = (isLoading) => {
@@ -78,8 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showLoading(true);
         tableBody.innerHTML = '';
         try {
-            // --- TAMBAHKAN 'credentials' DI SINI ---
-            const response = await fetch(`${apiBase}/tokens`, {
+            const response = await fetch(apiEndpoint, { // Menggunakan variabel endpoint yang sudah benar
                 credentials: 'same-origin'
             });
 
@@ -87,7 +87,6 @@ document.addEventListener('DOMContentLoaded', () => {
                  if(response.status === 401 || response.status === 403) {
                     document.body.innerHTML = `<h1>Akses Ditolak</h1><p>Autentikasi gagal saat mengambil data token. Silakan refresh halaman dan login kembali.</p>`;
                 }
-                // Kita buat pesan error lebih deskriptif
                 throw new Error(`Gagal mengambil data dari server. Status: ${response.status} ${response.statusText}`);
             }
             const tokens = await response.json();
@@ -96,7 +95,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         } catch (error) {
             console.error('Error fetching tokens:', error);
-            // Tampilkan pesan error yang lebih jelas di tabel
             tableBody.innerHTML = `<tr><td colspan="5" style="color: red; text-align: center;"><b>Error:</b> ${error.message}</td></tr>`;
         } finally {
             showLoading(false);
@@ -106,8 +104,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Fungsi umum untuk mengirim request POST ke API
     const apiRequest = async (action, data) => {
         try {
-            // --- TAMBAHKAN 'credentials' DI SINI JUGA ---
-            const response = await fetch(`${apiBase}/tokens`, {
+            const response = await fetch(apiEndpoint, { // Menggunakan variabel endpoint yang sudah benar
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action, ...data }),
@@ -122,7 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error(`API request failed for action ${action}:`, error);
             alert(`Error: ${error.message}`);
-            return null; // Kembalikan null jika gagal
+            return null;
         }
     };
     
