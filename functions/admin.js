@@ -1,4 +1,36 @@
 // File: functions/admin.js
+async function publishMqttViaApi(topic, payload, env) {
+    // Pastikan variabel environment sudah diatur
+
+    const apiUrl = "https://xf46ce9c.ala.asia-southeast1.emqxsl.com:8443/api/v5/publish";
+    const credentials = "p11a1e1e:J64_aoHEqfrkzk*C";
+    const authHeader = `Basic ${btoa(credentials)}`; // btoa tersedia di environment Cloudflare Functions
+
+    try {
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': authHeader,
+            },
+            body: JSON.stringify({
+                topic: topic,
+                payload: payload,
+                qos: 1, // Quality of Service
+                retain: false,
+            }),
+        });
+
+        if (!response.ok) {
+            const errorBody = await response.text();
+            console.error(`Gagal publish MQTT via API: ${response.status} ${response.statusText}`, errorBody);
+        } else {
+            console.log(`Berhasil publish MQTT via API ke topik: ${topic}`);
+        }
+    } catch (error) {
+        console.error("Error saat memanggil EMQX API:", error);
+    }
+}
 
 // Fungsi helper untuk menghasilkan token acak yang aman
 function generateSecureToken(length = 32) {
@@ -151,22 +183,23 @@ export async function onRequest(context) {
 
         switch (action) {
             case 'add': {
-                const user = formData.get('user');
+                // ... (logika 'add' tidak berubah, karena tidak ada sesi aktif yang perlu di-kick) ...
+                 const user = formData.get('user');
                 const pass = formData.get('pass');
                 if (user && pass) {
-                    // Temukan ID tertinggi untuk menentukan ID berikutnya
                     const list = await env.TOKEN.list();
                     const allTokens = await Promise.all(list.keys.map(k => env.TOKEN.get(k.name, 'json')));
                     const maxId = allTokens.reduce((max, t) => (t && t.id > max ? t.id : max), 0);
                     
-                    const newToken = generateSecureToken();
+                    const newToken = generateSecureToken(16); // Generate token lebih pendek
                     const newValue = { id: maxId + 1, user, pass };
                     await env.TOKEN.put(newToken, JSON.stringify(newValue));
                 }
                 break;
             }
             case 'update': {
-                const user = formData.get('user');
+                // ... (logika 'update' tidak berubah) ...
+                 const user = formData.get('user');
                 const pass = formData.get('pass');
                 const id = parseInt(formData.get('id'), 10);
                 if (tokenKey && user && pass) {
@@ -177,18 +210,31 @@ export async function onRequest(context) {
             }
             case 'generate_new': {
                 if (tokenKey) {
-                    const value = await env.TOKEN.get(tokenKey);
-                    if (value) {
-                        const newToken = generateSecureToken();
-                        await env.TOKEN.put(newToken, value); // Simpan dengan token baru
+                    // Ambil data lama untuk mendapatkan 'user'
+                    const oldData = await env.TOKEN.get(tokenKey, 'json');
+                    if (oldData) {
+                        const newToken = generateSecureToken(16);
+                        await env.TOKEN.put(newToken, JSON.stringify(oldData)); // Simpan dengan token baru
                         await env.TOKEN.delete(tokenKey); // Hapus token lama
+
+                        // KIRIM PESAN KICK!
+                        const kickTopic = `system/kick/${oldData.user}`;
+                        await publishMqttViaApi(kickTopic, 'session_revoked', env);
                     }
                 }
                 break;
             }
             case 'delete': {
                 if (tokenKey) {
-                    await env.TOKEN.delete(tokenKey);
+                    // Ambil data lama untuk mendapatkan 'user' SEBELUM dihapus
+                    const oldData = await env.TOKEN.get(tokenKey, 'json');
+                    await env.TOKEN.delete(tokenKey); // Hapus token
+
+                    if (oldData) {
+                        // KIRIM PESAN KICK!
+                        const kickTopic = `system/kick/${oldData.user}`;
+                        await publishMqttViaApi(kickTopic, 'session_revoked', env);
+                    }
                 }
                 break;
             }
