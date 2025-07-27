@@ -1,4 +1,4 @@
-// File: admin.client.js
+// File: admin.client.js (VERSI PERBAIKAN)
 
 document.addEventListener('DOMContentLoaded', () => {
     const tableBody = document.querySelector('#tokens-table tbody');
@@ -36,39 +36,35 @@ document.addEventListener('DOMContentLoaded', () => {
         const actionsCell = document.createElement('td');
         actionsCell.className = 'actions-cell';
         
-        // Tombol Simpan
         const saveBtn = createButton('Simpan', 'btn-save', async (e) => {
             const button = e.target;
             button.disabled = true;
             button.textContent = 'Menyimpan...';
             const user = row.querySelector('.user-input').value;
             const pass = row.querySelector('.pass-input').value;
-            await apiRequest('update', { token_key: tokenData.key, id: tokenData.value.id, user, pass });
+            const result = await apiRequest('update', { token_key: tokenData.key, id: tokenData.value.id, user, pass });
             button.disabled = false;
             button.textContent = 'Simpan';
-            alert('Data berhasil disimpan.');
+            if(result) alert('Data berhasil disimpan.');
         });
         
-        // Tombol Generate Baru
         const genBtn = createButton('Generate Baru', 'btn-generate', async (e) => {
             if (!confirm('Yakin ingin generate token baru? Token lama akan hangus.')) return;
             e.target.disabled = true;
             await apiRequest('generate_new', { token_key: tokenData.key });
-            fetchTokens(); // Muat ulang semua data
+            fetchTokens();
         });
 
-        // Tombol Copy URL
         const copyBtn = createButton('Copy URL', 'btn-copy', () => {
             const urlToCopy = `${window.location.origin}/${tokenData.key}`;
             navigator.clipboard.writeText(urlToCopy).then(() => alert('URL disalin!'));
         });
 
-        // Tombol Hapus
         const delBtn = createButton('Hapus', 'btn-delete', async (e) => {
             if (!confirm('Yakin ingin menghapus token ini?')) return;
             e.target.disabled = true;
             await apiRequest('delete', { token_key: tokenData.key });
-            fetchTokens(); // Muat ulang semua data
+            fetchTokens();
         });
 
         actionsCell.append(saveBtn, genBtn, copyBtn, delBtn);
@@ -80,15 +76,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // Fungsi utama untuk mengambil data dari API
     const fetchTokens = async () => {
         showLoading(true);
-        tableBody.innerHTML = ''; // Kosongkan tabel
+        tableBody.innerHTML = '';
         try {
-            const response = await fetch(`${apiBase}/tokens`);
+            // --- TAMBAHKAN 'credentials' DI SINI ---
+            const response = await fetch(`${apiBase}/tokens`, {
+                credentials: 'same-origin'
+            });
+
             if (!response.ok) {
-                if(response.status === 401) {
-                    alert('Sesi tidak valid. Silakan login kembali.');
-                    document.body.innerHTML = '<h1>Akses Ditolak</h1>';
+                 if(response.status === 401 || response.status === 403) {
+                    document.body.innerHTML = `<h1>Akses Ditolak</h1><p>Autentikasi gagal saat mengambil data token. Silakan refresh halaman dan login kembali.</p>`;
                 }
-                throw new Error(`Gagal mengambil data: ${response.statusText}`);
+                // Kita buat pesan error lebih deskriptif
+                throw new Error(`Gagal mengambil data dari server. Status: ${response.status} ${response.statusText}`);
             }
             const tokens = await response.json();
             tokens.forEach(token => {
@@ -96,7 +96,8 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         } catch (error) {
             console.error('Error fetching tokens:', error);
-            tableBody.innerHTML = `<tr><td colspan="5">Gagal memuat data. Cek konsol.</td></tr>`;
+            // Tampilkan pesan error yang lebih jelas di tabel
+            tableBody.innerHTML = `<tr><td colspan="5" style="color: red; text-align: center;"><b>Error:</b> ${error.message}</td></tr>`;
         } finally {
             showLoading(false);
         }
@@ -105,11 +106,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // Fungsi umum untuk mengirim request POST ke API
     const apiRequest = async (action, data) => {
         try {
+            // --- TAMBAHKAN 'credentials' DI SINI JUGA ---
             const response = await fetch(`${apiBase}/tokens`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action, ...data })
+                body: JSON.stringify({ action, ...data }),
+                credentials: 'same-origin'
             });
+
             if (!response.ok) {
                 const error = await response.json();
                 throw new Error(error.message || 'Terjadi kesalahan pada server');
@@ -118,6 +122,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error(`API request failed for action ${action}:`, error);
             alert(`Error: ${error.message}`);
+            return null; // Kembalikan null jika gagal
         }
     };
     
@@ -136,7 +141,7 @@ document.addEventListener('DOMContentLoaded', () => {
         addForm.reset();
         button.disabled = false;
         button.textContent = 'Tambah Token';
-        fetchTokens(); // Muat ulang data
+        fetchTokens();
     });
 
     // Muat data saat halaman pertama kali dibuka
