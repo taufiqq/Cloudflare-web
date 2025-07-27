@@ -28,7 +28,7 @@ export async function onRequest(context) {
         let html = await asset.text();
 
         // Pastikan variabel environment ada
-        cons mqtt = await env.ADMIN.get('MQTT','json');
+        const mqtt = await env.ADMIN.get('MQTT','json');
 
         // Siapkan skrip untuk disuntikkan
         const injectionScript = `
