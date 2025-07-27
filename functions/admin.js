@@ -1,10 +1,9 @@
-// File: functions/admin.js (VERSI BARU YANG JAUH LEBIH SIMPEL)
+// File: functions/admin.js (VERSI BARU UNTUK INJECT SCRIPT)
 
 export async function onRequest(context) {
     const { request, env } = context;
 
-    // --- AUTENTIKASI (Basic Auth) ---
-    // Diperlukan agar hanya admin yang bisa melihat halaman HTML-nya.
+    // --- AUTENTIKASI ADMIN ---
     const authHeader = request.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Basic ')) {
         return new Response('Autentikasi diperlukan.', {
@@ -22,14 +21,35 @@ export async function onRequest(context) {
         });
     }
 
-    // --- MENYAJIKAN FILE HTML STATIS ---
-    // Jika autentikasi berhasil, ambil file admin.html dari aset statis
-    // dan kirimkan ke browser.
+    // --- PROSES BARU: AMBIL HTML, SUNTIKKAN SCRIPT, KIRIM ---
     try {
         const assetUrl = new URL('/admin.html', request.url);
         const asset = await env.ASSETS.fetch(assetUrl);
-        return new Response(asset.body, asset);
+        let html = await asset.text();
+
+        // Pastikan variabel environment ada
+        cons mqtt = await env.ADMIN.get('MQTT','json')
+
+        // Siapkan skrip untuk disuntikkan
+        const injectionScript = `
+        <script>
+            // Data ini disuntikkan oleh Cloudflare Function
+            window.ADMIN_MQTT_CREDS = {
+                user: "${mqtt.user}",
+                pass: "${mqtt.pass}"
+            };
+        </script>
+        `;
+
+        // Suntikkan skrip tersebut tepat sebelum tag </body>
+        html = html.replace('</body>', `${injectionScript}</body>`);
+
+        return new Response(html, {
+            headers: { 'Content-Type': 'text/html;charset=UTF-8' },
+        });
+
     } catch (e) {
+        console.error("Gagal memuat atau memodifikasi admin.html:", e);
         return new Response('Gagal memuat halaman admin. Pastikan file admin.html ada.', { status: 500 });
     }
 }

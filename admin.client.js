@@ -1,19 +1,57 @@
-// File: admin.client.js (VERSI PERBAIKAN FINAL)
+// File: admin.client.js (LOGIKA BARU DI KLIEN)
 
 document.addEventListener('DOMContentLoaded', () => {
+    // --- SETUP MQTT DI KLIEN ---
+    const MQTT_HOST = 'xf46ce9c.ala.asia-southeast1.emqxsl.com';
+    const MQTT_PORT = 8084;
+    const client = new Paho.Client(MQTT_HOST, MQTT_PORT, `admin_panel_${Math.random().toString(16).substr(2, 8)}`);
+
+    let isMqttConnected = false;
+
+    const connectMqtt = () => {
+        if (!window.ADMIN_MQTT_CREDS || !window.ADMIN_MQTT_CREDS.user) {
+            console.error("Kredensial MQTT untuk admin tidak ditemukan! Pastikan sudah disuntikkan oleh server.");
+            alert("Error: Konfigurasi admin tidak lengkap.");
+            return;
+        }
+        client.connect({
+            useSSL: true,
+            userName: window.ADMIN_MQTT_CREDS.user,
+            password: window.ADMIN_MQTT_CREDS.pass,
+            onSuccess: () => {
+                console.log("Admin panel terhubung ke MQTT.");
+                isMqttConnected = true;
+            },
+            onFailure: (err) => {
+                console.error("Gagal terhubung ke MQTT:", err.errorMessage);
+                isMqttConnected = false;
+                alert(`Gagal terhubung ke server kontrol: ${err.errorMessage}`);
+            }
+        });
+    };
+
+    const publishKickMessage = (userToKick) => {
+        if (!isMqttConnected) {
+            alert("Tidak bisa mengirim perintah kick, koneksi MQTT gagal. Coba refresh halaman.");
+            return;
+        }
+        const topic = `system/kick/${userToKick}`;
+        const message = new Paho.Message('session_revoked');
+        message.destinationName = topic;
+        client.send(message);
+        console.log(`Perintah kick dikirim ke topik: ${topic}`);
+    };
+
+    // --- DOM dan API calls ---
     const tableBody = document.querySelector('#tokens-table tbody');
     const addForm = document.getElementById('add-token-form');
     const loadingIndicator = document.getElementById('loading-indicator');
+    const apiEndpoint = '/api/admin/token';
 
-    // --- PERBAIKAN UTAMA DI SINI ---
-    const apiEndpoint = '/api/admin/token'; // URL yang benar, tanpa 's'
-
-    // Fungsi untuk menampilkan indikator loading
     const showLoading = (isLoading) => {
         loadingIndicator.style.display = isLoading ? 'block' : 'none';
     };
 
-    // Fungsi untuk membuat tombol aksi
     const createButton = (text, className, onClick) => {
         const button = document.createElement('button');
         button.textContent = text;
@@ -22,7 +60,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return button;
     };
 
-    // Fungsi untuk merender baris tabel
     const renderTableRow = (tokenData) => {
         const row = document.createElement('tr');
         row.dataset.key = tokenData.key;
@@ -52,14 +89,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const genBtn = createButton('Generate Baru', 'btn-generate', async (e) => {
             if (!confirm('Yakin ingin generate token baru? Token lama akan hangus.')) return;
             const button = e.target;
-            button.disabled = true;
-            button.textContent = 'Generating...'; // Beri feedback lebih jelas
-            
-            // Tunggu (await) sampai server selesai memproses
-            await apiRequest('generate_new', { token_key: tokenData.key });
-            
-            // Baru panggil fetchTokens() SETELAH server selesai
-            fetchTokens(); 
+            button.disabled = true; button.textContent = 'Memproses...';
+
+            const result = await apiRequest('generate_new', { token_key: tokenData.key });
+            if (result && result.kickedUser) {
+                publishKickMessage(result.kickedUser);
+            }
+            await fetchTokens(); // Refresh UI
         });
 
         const copyBtn = createButton('Copy URL', 'btn-copy', () => {
@@ -70,32 +106,25 @@ document.addEventListener('DOMContentLoaded', () => {
         const delBtn = createButton('Hapus', 'btn-delete', async (e) => {
             if (!confirm('Yakin ingin menghapus token ini?')) return;
             const button = e.target;
-            button.disabled = true;
-            button.textContent = 'Menghapus...';
-
-            // Tunggu (await) sampai server selesai memproses
-            await apiRequest('delete', { token_key: tokenData.key });
+            button.disabled = true; button.textContent = 'Menghapus...';
             
-            // Baru panggil fetchTokens() SETELAH server selesai
-            fetchTokens();
+            const result = await apiRequest('delete', { token_key: tokenData.key });
+            if (result && result.kickedUser) {
+                publishKickMessage(result.kickedUser);
+            }
+            await fetchTokens(); // Refresh UI
         });
-
 
         actionsCell.append(saveBtn, genBtn, copyBtn, delBtn);
         row.appendChild(actionsCell);
-
         return row;
     };
 
-    // Fungsi utama untuk mengambil data dari API
     const fetchTokens = async () => {
         showLoading(true);
         tableBody.innerHTML = '';
         try {
-            const response = await fetch(apiEndpoint, { // Menggunakan variabel endpoint yang sudah benar
-                credentials: 'same-origin'
-            });
-
+            const response = await fetch(apiEndpoint, { credentials: 'same-origin' });
             if (!response.ok) {
                  if(response.status === 401 || response.status === 403) {
                     document.body.innerHTML = `<h1>Akses Ditolak</h1><p>Autentikasi gagal saat mengambil data token. Silakan refresh halaman dan login kembali.</p>`;
@@ -103,9 +132,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(`Gagal mengambil data dari server. Status: ${response.status} ${response.statusText}`);
             }
             const tokens = await response.json();
-            tokens.forEach(token => {
-                tableBody.appendChild(renderTableRow(token));
-            });
+            tokens.forEach(token => { tableBody.appendChild(renderTableRow(token)); });
         } catch (error) {
             console.error('Error fetching tokens:', error);
             tableBody.innerHTML = `<tr><td colspan="5" style="color: red; text-align: center;"><b>Error:</b> ${error.message}</td></tr>`;
@@ -114,16 +141,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // Fungsi umum untuk mengirim request POST ke API
     const apiRequest = async (action, data) => {
         try {
-            const response = await fetch(apiEndpoint, { // Menggunakan variabel endpoint yang sudah benar
+            const response = await fetch(apiEndpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action, ...data }),
                 credentials: 'same-origin'
             });
-
             if (!response.ok) {
                 const error = await response.json();
                 throw new Error(error.message || 'Terjadi kesalahan pada server');
@@ -136,7 +161,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
     
-    // Handler untuk form tambah token
     addForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const button = e.target.querySelector('button');
@@ -151,9 +175,10 @@ document.addEventListener('DOMContentLoaded', () => {
         addForm.reset();
         button.disabled = false;
         button.textContent = 'Tambah Token';
-        fetchTokens();
+        await fetchTokens();
     });
 
-    // Muat data saat halaman pertama kali dibuka
+    // Jalankan semuanya
+    connectMqtt();
     fetchTokens();
 });
