@@ -3,7 +3,7 @@
 // Fungsi publish MQTT yang sudah diperbaiki
 async function publishMqttViaApi(topic, payload) {
     const apiUrl = `https://xf46ce9c.ala.asia-southeast1.emqxsl.com:8443/api/v5/publish`;
-    const authHeader = `Basic ${btoa(`p11a1e1e:J64_aoHEqfrkzk*C`);
+    const authHeader = `Basic ${btoa(`p11a1e1e:J64_aoHEqfrkzk*C`)}`;
     try {
         const response = await fetch(apiUrl, {
             method: 'POST',
