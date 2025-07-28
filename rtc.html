@@ -1,102 +1,25 @@
-<script>
-const SIGNAL_URL = "/signal";
-let pc, localStream, roomId;
-let sentCandidates = new Set();
-let fetchedCandidates = new Set();
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebRTC STUN Demo</title>
+</head>
+<body>
+    <h1>WebRTC dengan STUN (Cloudflare Pages)</h1>
 
-async function getIceServers() {
-  return [{ urls: "stun:stun.l.google.com:19302" }];
-}
+    <div>
+        <video id="localVideo" autoplay playsinline muted></video>
+        <video id="remoteVideo" autoplay playsinline></video>
+    </div>
 
-async function initPeer() {
-  const iceServers = await getIceServers();
-  pc = new RTCPeerConnection({ iceServers });
+    <button id="startBtn">Mulai</button>
+    <button id="callBtn">Panggil</button>
+    <button id="answerBtn">Jawab</button>
 
-  pc.onicecandidate = async (event) => {
-    if (event.candidate) {
-      const cand = event.candidate.candidate;
-      if (cand.includes("typ relay")) return; // skip TURN
-      if (sentCandidates.has(cand)) return; // skip duplicate
-      sentCandidates.add(cand);
+    <textarea id="offer" placeholder="Offer"></textarea>
+    <textarea id="answer" placeholder="Answer"></textarea>
 
-      await fetch(SIGNAL_URL, {
-        method: "POST",
-        body: JSON.stringify({ type: "candidate", roomId, data: event.candidate }),
-      });
-    }
-  };
-
-  pc.ontrack = (event) => {
-    document.getElementById("remoteVideo").srcObject = event.streams[0];
-  };
-
-  localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-  document.getElementById("localVideo").srcObject = localStream;
-  localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-}
-
-async function pollCandidates() {
-  setInterval(async () => {
-    if (!pc.remoteDescription) return;
-    const res = await fetch(`${SIGNAL_URL}?type=candidate&roomId=${roomId}`);
-    const candidates = await res.json();
-
-    candidates.forEach(async c => {
-      if (fetchedCandidates.has(c.candidate)) return; // skip duplicate
-      fetchedCandidates.add(c.candidate);
-      try {
-        await pc.addIceCandidate(new RTCIceCandidate(c));
-      } catch (e) {
-        console.error("Failed to add ICE candidate", e);
-      }
-    });
-  }, 2000);
-}
-
-document.getElementById("start").onclick = async () => {
-  roomId = document.getElementById("roomId").value.trim();
-  if (!roomId) return alert("Enter Room ID");
-
-  await initPeer();
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-
-  await fetch(SIGNAL_URL, {
-    method: "POST",
-    body: JSON.stringify({ type: "offer", roomId, data: offer }),
-  });
-
-  const interval = setInterval(async () => {
-    const res = await fetch(`${SIGNAL_URL}?type=answer&roomId=${roomId}`);
-    const answer = await res.json();
-    if (answer.type) {
-      clearInterval(interval);
-      await pc.setRemoteDescription(answer);
-    }
-  }, 2000);
-
-  pollCandidates();
-};
-
-document.getElementById("answer").onclick = async () => {
-  roomId = document.getElementById("roomId").value.trim();
-  if (!roomId) return alert("Enter Room ID");
-
-  await initPeer();
-
-  const res = await fetch(`${SIGNAL_URL}?type=offer&roomId=${roomId}`);
-  const offer = await res.json();
-  if (!offer.type) return alert("No offer yet");
-
-  await pc.setRemoteDescription(offer);
-  const answer = await pc.createAnswer();
-  await pc.setLocalDescription(answer);
-
-  await fetch(SIGNAL_URL, {
-    method: "POST",
-    body: JSON.stringify({ type: "answer", roomId, data: answer }),
-  });
-
-  pollCandidates();
-};
-</script>
+    <script src="rtc.js"></script>
+</body>
+</html>
