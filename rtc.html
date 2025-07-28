@@ -51,13 +51,19 @@ async function initPeer() {
 
 async function pollCandidates() {
   setInterval(async () => {
+    if (!pc.remoteDescription) return; // Tunggu sampai remote description sudah diset
     const res = await fetch(`${SIGNAL_URL}?type=candidate&roomId=${roomId}`);
     const candidates = await res.json();
-    candidates.forEach(c => {
-      pc.addIceCandidate(new RTCIceCandidate(c));
+    candidates.forEach(async c => {
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(c));
+      } catch (e) {
+        console.error("Failed to add ICE candidate", e);
+      }
     });
   }, 2000);
 }
+
 
 document.getElementById("start").onclick = async () => {
   roomId = document.getElementById("roomId").value.trim();
