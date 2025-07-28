@@ -22,8 +22,13 @@ export async function onRequest(context) {
       const key = `candidates-${roomId}`;
       const existing = await env.SIGNAL_STORE.get(key);
       const candidates = existing ? JSON.parse(existing) : [];
-      candidates.push(data);
-      await env.SIGNAL_STORE.put(key, JSON.stringify(candidates));
+
+      // ✅ Deduplication & limit
+      if (!candidates.find(c => c.candidate === data.candidate)) {
+        candidates.push(data);
+        if (candidates.length > 20) candidates.shift(); // limit 20
+        await env.SIGNAL_STORE.put(key, JSON.stringify(candidates));
+      }
     }
 
     return new Response("OK");
@@ -50,6 +55,13 @@ export async function onRequest(context) {
     if (type === "candidate") {
       const candidates = await env.SIGNAL_STORE.get(`candidates-${roomId}`);
       return new Response(candidates || "[]");
+    }
+
+    if (type === "clear") {
+      await env.SIGNAL_STORE.delete(`offer-${roomId}`);
+      await env.SIGNAL_STORE.delete(`answer-${roomId}`);
+      await env.SIGNAL_STORE.delete(`candidates-${roomId}`);
+      return new Response("CLEARED");
     }
   }
 
