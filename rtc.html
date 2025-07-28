@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>WebRTC Cloudflare Demo</title>
+  <title>WebRTC STUN Only</title>
 </head>
 <body>
-  <h1>WebRTC via Cloudflare</h1>
+  <h1>WebRTC STUN Only (Hemat Kuota)</h1>
   <input id="roomId" placeholder="Enter Room ID">
   <button id="start">Start Call</button>
   <button id="answer">Answer Call</button>
@@ -13,13 +13,11 @@
     <video id="remoteVideo" autoplay playsinline></video>
   </div>
 <script>
-const API_KEY = "de0c9f27b8817a72382119146606bdc1cb83";
-const SIGNAL_URL = "/signal";
-
+const SIGNAL_URL = "/signal"; // Cloudflare Functions path
 let pc, localStream, roomId;
 
+// ✅ Pakai STUN gratis (Google)
 async function getIceServers() {
-  // Hanya pakai STUN gratis dari Google
   return [{ urls: "stun:stun.l.google.com:19302" }];
 }
 
@@ -49,9 +47,10 @@ async function initPeer() {
   localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
 }
 
+// ✅ Polling untuk candidate, tapi tunggu remote description dulu
 async function pollCandidates() {
   setInterval(async () => {
-    if (!pc.remoteDescription) return; // Tunggu sampai remote description sudah diset
+    if (!pc.remoteDescription) return; // jangan add kalau belum siap
     const res = await fetch(`${SIGNAL_URL}?type=candidate&roomId=${roomId}`);
     const candidates = await res.json();
     candidates.forEach(async c => {
@@ -63,7 +62,6 @@ async function pollCandidates() {
     });
   }, 2000);
 }
-
 
 document.getElementById("start").onclick = async () => {
   roomId = document.getElementById("roomId").value.trim();
@@ -79,7 +77,7 @@ document.getElementById("start").onclick = async () => {
     body: JSON.stringify({ type: "offer", roomId, data: offer }),
   });
 
-  // Wait for answer
+  // Tunggu jawaban
   const interval = setInterval(async () => {
     const res = await fetch(`${SIGNAL_URL}?type=answer&roomId=${roomId}`);
     const answer = await res.json();
@@ -98,7 +96,7 @@ document.getElementById("answer").onclick = async () => {
 
   await initPeer();
 
-  // Get offer
+  // Ambil offer
   const res = await fetch(`${SIGNAL_URL}?type=offer&roomId=${roomId}`);
   const offer = await res.json();
   if (!offer.type) return alert("No offer yet");
