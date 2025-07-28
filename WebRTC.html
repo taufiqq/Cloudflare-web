@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>WebRTC Demo</title>
+</head>
+<body>
+  <h1>WebRTC Demo via Cloudflare Functions</h1>
+  <button id="start">Start Call</button>
+  <button id="answer">Answer Call</button>
+  <video id="localVideo" autoplay playsinline></video>
+  <video id="remoteVideo" autoplay playsinline></video>
+<script>
+const API_KEY = "de0c9f27b8817a72382119146606bdc1cb83";
+const SIGNAL_URL = "/signal";
+const clientId = Math.random().toString(36).substring(2);
+
+let pc, localStream;
+
+async function getIceServers() {
+  const response = await fetch(`https://taufiq.metered.live/api/v1/turn/credentials?apiKey=${API_KEY}`);
+  return await response.json();
+}
+
+async function initPeer() {
+  const iceServers = await getIceServers();
+  pc = new RTCPeerConnection({ iceServers });
+  pc.onicecandidate = async (event) => {
+    if (event.candidate) {
+      await fetch(SIGNAL_URL, {
+        method: "POST",
+        body: JSON.stringify({ type: "candidate", clientId, data: event.candidate }),
+      });
+    }
+  };
+  pc.ontrack = (event) => {
+    document.getElementById("remoteVideo").srcObject = event.streams[0];
+  };
+
+  localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+  document.getElementById("localVideo").srcObject = localStream;
+  localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+}
+
+document.getElementById("start").onclick = async () => {
+  await initPeer();
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+
+  await fetch(SIGNAL_URL, {
+    method: "POST",
+    body: JSON.stringify({ type: "offer", clientId, data: offer }),
+  });
+
+  // Polling for answer
+  const interval = setInterval(async () => {
+    const res = await fetch(`${SIGNAL_URL}?type=answer&clientId=${clientId}`);
+    const answer = await res.json();
+    if (answer.type) {
+      clearInterval(interval);
+      await pc.setRemoteDescription(answer);
+    }
+  }, 2000);
+};
+
+document.getElementById("answer").onclick = async () => {
+  await initPeer();
+
+  // Get offer from remote
+  const res = await fetch(`${SIGNAL_URL}?type=offer&clientId=${clientId}`);
+  const offer = await res.json();
+  if (!offer.type) {
+    alert("No offer yet");
+    return;
+  }
+
+  await pc.setRemoteDescription(offer);
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+
+  await fetch(SIGNAL_URL, {
+    method: "POST",
+    body: JSON.stringify({ type: "answer", clientId, data: answer }),
+  });
+};
+</script>
+</body>
+</html>

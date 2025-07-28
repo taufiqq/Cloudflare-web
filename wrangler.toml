@@ -16,3 +16,7 @@ id = "e4b68d7dd477413fbe140f59259254c7" # ID KV Namespace Anda
 [[kv_namespaces]]
 binding = "ADMIN"
 id = "65af14e6ce5f4aad928fc3e474c8642e"
+
+[[kv_namespaces]]
+binding = "SIGNAL_STORE"
+id = "bfae04f1216a42cab3d602525c423f0f"

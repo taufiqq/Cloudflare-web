@@ -1,4 +1,4 @@
-// File: admin.client.js (LOGIKA BARU DI KLIEN)
+// File: admin.client.js (DENGAN SOLUSI DELAY)
 
 document.addEventListener('DOMContentLoaded', () => {
     // --- SETUP MQTT DI KLIEN ---
@@ -41,6 +41,9 @@ document.addEventListener('DOMContentLoaded', () => {
         client.send(message);
         console.log(`Perintah kick dikirim ke topik: ${topic}`);
     };
+    
+    // --- FUNGSI BARU UNTUK DELAY ---
+    const delay = ms => new Promise(res => setTimeout(res, ms));
 
     // --- DOM dan API calls ---
     const tableBody = document.querySelector('#tokens-table tbody');
@@ -76,13 +79,11 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const saveBtn = createButton('Simpan', 'btn-save', async (e) => {
             const button = e.target;
-            button.disabled = true;
-            button.textContent = 'Menyimpan...';
+            button.disabled = true; button.textContent = 'Menyimpan...';
             const user = row.querySelector('.user-input').value;
             const pass = row.querySelector('.pass-input').value;
             const result = await apiRequest('update', { token_key: tokenData.key, id: tokenData.value.id, user, pass });
-            button.disabled = false;
-            button.textContent = 'Simpan';
+            button.disabled = false; button.textContent = 'Simpan';
             if(result) alert('Data berhasil disimpan.');
         });
         
@@ -95,7 +96,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (result && result.kickedUser) {
                 publishKickMessage(result.kickedUser);
             }
-            await fetchTokens(); // Refresh UI
+            
+            // --- TAMBAHKAN DELAY DI SINI ---
+            await delay(800); // Tunggu 800 milidetik
+            
+            await fetchTokens(); // Refresh UI setelah delay
         });
 
         const copyBtn = createButton('Copy URL', 'btn-copy', () => {
@@ -112,7 +117,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (result && result.kickedUser) {
                 publishKickMessage(result.kickedUser);
             }
-            await fetchTokens(); // Refresh UI
+
+            // --- TAMBAHKAN DELAY DI SINI JUGA ---
+            await delay(800); // Tunggu 800 milidetik
+
+            await fetchTokens(); // Refresh UI setelah delay
         });
 
         actionsCell.append(saveBtn, genBtn, copyBtn, delBtn);
@@ -132,7 +141,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(`Gagal mengambil data dari server. Status: ${response.status} ${response.statusText}`);
             }
             const tokens = await response.json();
-            tokens.forEach(token => { tableBody.appendChild(renderTableRow(token)); });
+            if (tokens.length === 0) {
+                 tableBody.innerHTML = `<tr><td colspan="5" style="text-align: center;">Belum ada token.</td></tr>`;
+            } else {
+                tokens.forEach(token => { tableBody.appendChild(renderTableRow(token)); });
+            }
         } catch (error) {
             console.error('Error fetching tokens:', error);
             tableBody.innerHTML = `<tr><td colspan="5" style="color: red; text-align: center;"><b>Error:</b> ${error.message}</td></tr>`;
@@ -164,17 +177,15 @@ document.addEventListener('DOMContentLoaded', () => {
     addForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const button = e.target.querySelector('button');
-        button.disabled = true;
-        button.textContent = 'Menambahkan...';
-        
+        button.disabled = true; button.textContent = 'Menambahkan...';
         const user = document.getElementById('add-user').value;
         const pass = document.getElementById('add-pass').value;
-        
         await apiRequest('add', { user, pass });
-        
         addForm.reset();
-        button.disabled = false;
-        button.textContent = 'Tambah Token';
+        button.disabled = false; button.textContent = 'Tambah Token';
+
+        // Beri delay juga untuk operasi 'add'
+        await delay(800);
         await fetchTokens();
     });
 
