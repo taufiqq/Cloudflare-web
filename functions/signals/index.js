@@ -19,7 +19,7 @@ export default {
 
     // Endpoint untuk membuat sesi baru oleh Pengirim
     // POST /session
-    if (request.method === 'POST' && path[1] === 'session' && path.length === 1) {
+    if (request.method === 'POST' && path[1] === 'session' && path.length === 2) {
       try {
         const { offer } = await request.json();
         if (!offer) {
