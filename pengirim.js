@@ -7,7 +7,7 @@ const statusDiv = document.getElementById('status');
 
 // Konfigurasi WebRTC
 const configuration = {
-    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] // STUN server gratis dari Google
+    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
 };
 
 let peerConnection;
@@ -15,6 +15,9 @@ let localStream;
 let lastSignalId = 0;
 const sessionId = 'session-' + Math.random().toString(36).substr(2, 9);
 sessionIdDisplay.textContent = sessionId;
+
+// >>> PERBAIKAN: Buat antrian untuk kandidat dari remote (penerima)
+let remoteCandidateQueue = [];
 
 const updateStatus = (message) => {
     console.log(message);
@@ -39,22 +42,47 @@ async function pollSignals() {
         for (const signal of signals) {
             updateStatus(`Menerima sinyal tipe: ${signal.type}`);
             const signalData = JSON.parse(signal.data);
+            lastSignalId = signal.id; // Selalu update ID sinyal terakhir
 
             if (signal.type === 'answer') {
+                // Periksa apakah remote description sudah ada. Jika belum, setel.
                 if (peerConnection.signalingState !== 'stable') {
                     await peerConnection.setRemoteDescription(new RTCSessionDescription(signalData));
-                    updateStatus('Koneksi berhasil dibuat!');
+                    updateStatus('Answer diterima dan disetel sebagai remote description.');
+
+                    // >>> PERBAIKAN: Proses antrian kandidat SEKARANG
+                    updateStatus(`Memproses ${remoteCandidateQueue.length} kandidat dalam antrian...`);
+                    while(remoteCandidateQueue.length > 0) {
+                        const candidate = remoteCandidateQueue.shift();
+                        await peerConnection.addIceCandidate(candidate);
+                    }
+
+                    // Kita tidak perlu lagi memeriksa 'stable' state di sini, karena 'setRemoteDescription' sudah selesai.
+                    // Kondisi 'connected' akan ditangani oleh onconnectionstatechange.
                 }
             } else if (signal.type === 'candidate') {
-                await peerConnection.addIceCandidate(new RTCIceCandidate(signalData));
+                // >>> PERBAIKAN: Logika untuk menangani kandidat yang datang
+                const candidate = new RTCIceCandidate(signalData);
+                // Jika remote description sudah ada, langsung tambahkan.
+                if (peerConnection.remoteDescription) {
+                    await peerConnection.addIceCandidate(candidate);
+                } else {
+                    // Jika belum, masukkan ke antrian.
+                    updateStatus('Answer belum diterima, menampung candidate...');
+                    remoteCandidateQueue.push(candidate);
+                }
             }
-            lastSignalId = signal.id; // Update ID sinyal terakhir yang diterima
         }
     } catch (error) {
         console.error('Polling error:', error);
+        // Tangani error spesifik ini dengan pesan yang lebih jelas
+        if (error.name === 'InvalidStateError') {
+             updateStatus(`Error: ${error.message}. Ini biasanya terjadi jika kandidat datang sebelum answer. Kode sudah mencoba menanganinya.`);
+        } else {
+             updateStatus(`Error: ${error.message}`);
+        }
     } finally {
-        // Terus lakukan polling
-        setTimeout(pollSignals, 2000); // Poll setiap 2 detik
+        setTimeout(pollSignals, 2000);
     }
 }
 
@@ -66,14 +94,14 @@ startButton.onclick = async () => {
         // 1. Dapatkan media (kamera)
         const constraints = {
             video: {
-                width: { exact: 640 }, // 480p
+                width: { exact: 640 },
                 height: { exact: 480 },
                 frameRate: { ideal: 24, max: 24 }
             },
-            audio: false // Tanpa audio
+            audio: false
         };
         localStream = await navigator.mediaDevices.getUserMedia(constraints);
-        localVideo.srcObject = localStream; // Diperlukan agar stream aktif, meski video disembunyikan
+        localVideo.srcObject = localStream;
         updateStatus('Kamera berhasil diakses.');
 
         // 2. Buat Peer Connection
@@ -84,26 +112,30 @@ startButton.onclick = async () => {
             peerConnection.addTrack(track, localStream);
         });
 
-        // 4. Handle ICE Candidate
+        // 4. Handle ICE Candidate lokal (untuk dikirim)
         peerConnection.onicecandidate = event => {
             if (event.candidate) {
-                updateStatus('Mengirim ICE candidate...');
+                updateStatus('Mengirim ICE candidate lokal...');
                 sendSignal('candidate', event.candidate);
             }
         };
         
+        // 5. Monitor status koneksi
         peerConnection.onconnectionstatechange = () => {
             updateStatus(`Connection state: ${peerConnection.connectionState}`);
+            if (peerConnection.connectionState === "connected") {
+                updateStatus('Koneksi berhasil dibuat!');
+            }
         };
 
-        // 5. Buat Offer
+        // 6. Buat Offer
         const offer = await peerConnection.createOffer();
         await peerConnection.setLocalDescription(offer);
         updateStatus('Offer dibuat, mengirim ke server...');
         await sendSignal('offer', offer);
 
-        // 6. Mulai polling untuk Answer dari penerima
-        updateStatus('Menunggu Answer dari penerima...');
+        // 7. Mulai polling untuk Answer & Candidate dari penerima
+        updateStatus('Menunggu Answer dan Candidate dari penerima...');
         pollSignals();
 
     } catch (error) {
