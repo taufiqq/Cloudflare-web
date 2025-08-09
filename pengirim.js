@@ -92,15 +92,45 @@ startButton.onclick = async () => {
 
     try {
         // 1. Dapatkan media (kamera)
-        const constraints = {
+        const backCameraConstraints = {
             video: {
                 width: { exact: 640 },
-                height: { exact: 480 },
-                frameRate: { ideal: 24, max: 24 }
+                height: { exact: 360 },
+                frameRate: { ideal: 24, max: 24 },
+                facingMode: { ideal: "environment" } // Minta kamera belakang
             },
             audio: false
         };
-        localStream = await navigator.mediaDevices.getUserMedia(constraints);
+
+        // Constraint untuk kamera depan (user) sebagai fallback
+        const frontCameraConstraints = {
+            video: {
+                width: { exact: 640 },
+                height: { exact: 360 },
+                frameRate: { ideal: 24, max: 24 },
+                facingMode: "user" // Fallback ke kamera depan
+            },
+            audio: false
+        };
+        
+        try {
+            // Coba dapatkan kamera belakang dulu
+            updateStatus('Mencoba mengakses kamera belakang...');
+            localStream = await navigator.mediaDevices.getUserMedia(backCameraConstraints);
+        } catch (err) {
+            // Jika gagal (misal: tidak ada kamera belakang atau error lain)
+            console.warn('Gagal mendapatkan kamera belakang, mencoba kamera depan...', err);
+            updateStatus('Kamera belakang tidak ditemukan, beralih ke kamera depan...');
+            try {
+                // Coba dapatkan kamera depan sebagai fallback
+                localStream = await navigator.mediaDevices.getUserMedia(frontCameraConstraints);
+            } catch (fallbackErr) {
+                // Jika kamera depan juga gagal, lempar error utama
+                updateStatus('Gagal mengakses semua kamera.');
+                throw fallbackErr; // Melempar error agar ditangkap oleh blok catch utama
+            }
+        }
+        
         localVideo.srcObject = localStream;
         updateStatus('Kamera berhasil diakses.');
 
