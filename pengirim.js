@@ -5,144 +5,117 @@ const localVideo = document.getElementById('localVideo');
 const sessionIdDisplay = document.getElementById('sessionIdDisplay');
 const statusDiv = document.getElementById('status');
 
-// Konfigurasi WebRTC
+// --- PENGATURAN SUPABASE (Ganti dengan kredensial Anda) ---
+const SUPABASE_URL = 'https://umqbiksfxyiarsftwkac.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVtcWJpa3NmeHlpYXJzZnR3a2FjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMxNTM1NTUsImV4cCI6MjA2ODcyOTU1NX0.bNylE96swkVo5rNvqY5JDiM-nSFcs6nEGZEiFpNpos0';
+const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// -----------------------------------------------------------
+
+// ID unik untuk klien ini agar tidak memproses sinyalnya sendiri
+const clientId = 'pengirim-' + Math.random().toString(36).substr(2, 9);
+
 const configuration = {
     iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
 };
 
 let peerConnection;
 let localStream;
-let lastSignalId = 0;
+let remoteCandidateQueue = [];
 const sessionId = 'session-' + Math.random().toString(36).substr(2, 9);
 sessionIdDisplay.textContent = sessionId;
-
-// >>> PERBAIKAN: Buat antrian untuk kandidat dari remote (penerima)
-let remoteCandidateQueue = [];
 
 const updateStatus = (message) => {
     console.log(message);
     statusDiv.textContent = `Status: ${message}`;
 };
 
-// Fungsi untuk mengirim sinyal ke server
+// Fungsi BARU untuk mengirim sinyal ke Supabase
 async function sendSignal(type, data) {
-    await fetch('/api/signal', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, type, data })
-    });
+    await supabase.from('webrtc_signals').insert([
+        { session_id: sessionId, sender_id: clientId, type: type, data: data }
+    ]);
 }
 
-// Fungsi untuk polling (mengambil) sinyal dari server
-async function pollSignals() {
-    try {
-        const response = await fetch(`/api/signal?sessionId=${sessionId}&lastId=${lastSignalId}`);
-        const signals = await response.json();
+// Fungsi BARU untuk mendengarkan sinyal dari Supabase
+function subscribeToSignals() {
+    supabase.channel(`webrtc-signals-${sessionId}`)
+        .on(
+            'postgres_changes',
+            { 
+                event: 'INSERT', 
+                schema: 'public', 
+                table: 'webrtc_signals',
+                filter: `session_id=eq.${sessionId}`
+            },
+            async (payload) => {
+                const signal = payload.new;
 
-        for (const signal of signals) {
-            updateStatus(`Menerima sinyal tipe: ${signal.type}`);
-            const signalData = JSON.parse(signal.data);
-            lastSignalId = signal.id; // Selalu update ID sinyal terakhir
-
-            if (signal.type === 'answer') {
-                // Periksa apakah remote description sudah ada. Jika belum, setel.
-                if (peerConnection.signalingState !== 'stable') {
-                    await peerConnection.setRemoteDescription(new RTCSessionDescription(signalData));
-                    updateStatus('Answer diterima dan disetel sebagai remote description.');
-
-                    // >>> PERBAIKAN: Proses antrian kandidat SEKARANG
-                    updateStatus(`Memproses ${remoteCandidateQueue.length} kandidat dalam antrian...`);
-                    while(remoteCandidateQueue.length > 0) {
-                        const candidate = remoteCandidateQueue.shift();
-                        await peerConnection.addIceCandidate(candidate);
-                    }
-
-                    // Kita tidak perlu lagi memeriksa 'stable' state di sini, karena 'setRemoteDescription' sudah selesai.
-                    // Kondisi 'connected' akan ditangani oleh onconnectionstatechange.
+                // Abaikan sinyal yang dikirim oleh diri sendiri
+                if (signal.sender_id === clientId) {
+                    return;
                 }
-            } else if (signal.type === 'candidate') {
-                // >>> PERBAIKAN: Logika untuk menangani kandidat yang datang
-                const candidate = new RTCIceCandidate(signalData);
-                // Jika remote description sudah ada, langsung tambahkan.
-                if (peerConnection.remoteDescription) {
-                    await peerConnection.addIceCandidate(candidate);
-                } else {
-                    // Jika belum, masukkan ke antrian.
-                    updateStatus('Answer belum diterima, menampung candidate...');
-                    remoteCandidateQueue.push(candidate);
+
+                updateStatus(`Menerima sinyal tipe: ${signal.type}`);
+                const signalData = signal.data;
+
+                if (signal.type === 'answer') {
+                    if (peerConnection.signalingState !== 'stable') {
+                        await peerConnection.setRemoteDescription(new RTCSessionDescription(signalData));
+                        updateStatus('Answer diterima dan disetel sebagai remote description.');
+
+                        updateStatus(`Memproses ${remoteCandidateQueue.length} kandidat dalam antrian...`);
+                        while(remoteCandidateQueue.length > 0) {
+                            const candidate = remoteCandidateQueue.shift();
+                            await peerConnection.addIceCandidate(candidate);
+                        }
+                    }
+                } else if (signal.type === 'candidate') {
+                    const candidate = new RTCIceCandidate(signalData);
+                    if (peerConnection.remoteDescription) {
+                        await peerConnection.addIceCandidate(candidate);
+                    } else {
+                        updateStatus('Answer belum diterima, menampung candidate...');
+                        remoteCandidateQueue.push(candidate);
+                    }
                 }
             }
-        }
-    } catch (error) {
-        console.error('Polling error:', error);
-        // Tangani error spesifik ini dengan pesan yang lebih jelas
-        if (error.name === 'InvalidStateError') {
-             updateStatus(`Error: ${error.message}. Ini biasanya terjadi jika kandidat datang sebelum answer. Kode sudah mencoba menanganinya.`);
-        } else {
-             updateStatus(`Error: ${error.message}`);
-        }
-    } finally {
-        setTimeout(pollSignals, 2000);
-    }
+        )
+        .subscribe((status, err) => {
+            if (status === 'SUBSCRIBED') {
+                updateStatus('Berhasil subscribe ke channel sinyal. Menunggu penerima...');
+            } else {
+                updateStatus(`Gagal subscribe ke channel: ${err?.message || 'error tidak diketahui'}`);
+            }
+        });
 }
+
 
 startButton.onclick = async () => {
     startButton.disabled = true;
     updateStatus('Memulai...');
 
     try {
-        // 1. Dapatkan media (kamera)
-        const backCameraConstraints = {
-            video: {
-                width: { exact: 640 },
-                height: { exact: 360 },
-                frameRate: { ideal: 24, max: 24 },
-                facingMode: { ideal: "environment" } // Minta kamera belakang
-            },
-            audio: false
-        };
-
-        // Constraint untuk kamera depan (user) sebagai fallback
-        const frontCameraConstraints = {
-            video: {
-                width: { exact: 640 },
-                height: { exact: 360 },
-                frameRate: { ideal: 24, max: 24 },
-                facingMode: "user" // Fallback ke kamera depan
-            },
-            audio: false
-        };
+        const backCameraConstraints = { video: { width: { exact: 640 }, height: { exact: 360 }, frameRate: { ideal: 24, max: 24 }, facingMode: { ideal: "environment" } }, audio: false };
+        const frontCameraConstraints = { video: { width: { exact: 640 }, height: { exact: 360 }, frameRate: { ideal: 24, max: 24 }, facingMode: "user" }, audio: false };
         
         try {
-            // Coba dapatkan kamera belakang dulu
             updateStatus('Mencoba mengakses kamera belakang...');
             localStream = await navigator.mediaDevices.getUserMedia(backCameraConstraints);
         } catch (err) {
-            // Jika gagal (misal: tidak ada kamera belakang atau error lain)
             console.warn('Gagal mendapatkan kamera belakang, mencoba kamera depan...', err);
             updateStatus('Kamera belakang tidak ditemukan, beralih ke kamera depan...');
-            try {
-                // Coba dapatkan kamera depan sebagai fallback
-                localStream = await navigator.mediaDevices.getUserMedia(frontCameraConstraints);
-            } catch (fallbackErr) {
-                // Jika kamera depan juga gagal, lempar error utama
-                updateStatus('Gagal mengakses semua kamera.');
-                throw fallbackErr; // Melempar error agar ditangkap oleh blok catch utama
-            }
+            localStream = await navigator.mediaDevices.getUserMedia(frontCameraConstraints);
         }
         
         localVideo.srcObject = localStream;
         updateStatus('Kamera berhasil diakses.');
 
-        // 2. Buat Peer Connection
         peerConnection = new RTCPeerConnection(configuration);
 
-        // 3. Tambahkan track video ke koneksi
         localStream.getTracks().forEach(track => {
             peerConnection.addTrack(track, localStream);
         });
 
-        // 4. Handle ICE Candidate lokal (untuk dikirim)
         peerConnection.onicecandidate = event => {
             if (event.candidate) {
                 updateStatus('Mengirim ICE candidate lokal...');
@@ -150,7 +123,6 @@ startButton.onclick = async () => {
             }
         };
         
-        // 5. Monitor status koneksi
         peerConnection.onconnectionstatechange = () => {
             updateStatus(`Connection state: ${peerConnection.connectionState}`);
             if (peerConnection.connectionState === "connected") {
@@ -158,15 +130,13 @@ startButton.onclick = async () => {
             }
         };
 
-        // 6. Buat Offer
         const offer = await peerConnection.createOffer();
         await peerConnection.setLocalDescription(offer);
         updateStatus('Offer dibuat, mengirim ke server...');
         await sendSignal('offer', offer);
 
-        // 7. Mulai polling untuk Answer & Candidate dari penerima
-        updateStatus('Menunggu Answer dan Candidate dari penerima...');
-        pollSignals();
+        // Mulai mendengarkan sinyal dari penerima
+        subscribeToSignals();
 
     } catch (error) {
         console.error('Error starting stream:', error);
