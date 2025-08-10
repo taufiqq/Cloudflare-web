@@ -8,7 +8,7 @@ const statusDiv = document.getElementById('status');
 // --- PENGATURAN SUPABASE (Ganti dengan kredensial Anda) ---
 const SUPABASE_URL = 'https://umqbiksfxyiarsftwkac.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVtcWJpa3NmeHlpYXJzZnR3a2FjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMxNTM1NTUsImV4cCI6MjA2ODcyOTU1NX0.bNylE96swkVo5rNvqY5JDiM-nSFcs6nEGZEiFpNpos0';
-const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabaseC = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // -----------------------------------------------------------
 
 // ID unik untuk klien ini agar tidak memproses sinyalnya sendiri
@@ -31,14 +31,14 @@ const updateStatus = (message) => {
 
 // Fungsi BARU untuk mengirim sinyal ke Supabase
 async function sendSignal(type, data) {
-    await supabase.from('webrtc_signals').insert([
+    await supabaseC.from('webrtc_signals').insert([
         { session_id: sessionId, sender_id: clientId, type: type, data: data }
     ]);
 }
 
 // Fungsi BARU untuk mendengarkan sinyal dari Supabase
 function subscribeToSignals() {
-    supabase.channel(`webrtc-signals-${sessionId}`)
+    supabaseC.channel(`webrtc-signals-${sessionId}`)
         .on(
             'postgres_changes',
             { 
